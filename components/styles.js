@@ -89,14 +89,24 @@ export const styles = StyleSheet.create({
     justifyContent: 'center',
     flexDirection: 'row',
   },
+  // Variante compacta para botões que não devem ter preenchimento
+  photoButtonInnerCompact: {
+    width: '100%',
+    paddingVertical: 0,
+    paddingHorizontal: 6,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+  },
   photoButtonPrimary: {
     backgroundColor: colors.accent,
     borderWidth: 0,
   },
   photoButtonSecondary: {
-    backgroundColor: 'rgba(0,245,255,0.06)',
-    borderWidth: 1,
-    borderColor: 'rgba(0,245,255,0.12)',
+    // Sem borda e sem preenchimento por padrão — uso específico em botão de galeria
+    backgroundColor: 'transparent',
+    borderWidth: 0,
   },
   photoIcon: {
     marginRight: 10,

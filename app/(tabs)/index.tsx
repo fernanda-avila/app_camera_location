@@ -1,7 +1,6 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import * as React from 'react';
 import {
   Alert,
-  Button,
   Image,
   ImageSourcePropType,
   SafeAreaView,
@@ -12,35 +11,39 @@ import {
   View
 } from 'react-native';
 
+import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import MapView, { LatLng, MapPressEvent, Marker, Region } from 'react-native-maps';
 
-import { colors, styles } from './styles.js';
+import { colors, styles } from '../../components/styles.js';
 
 interface RegistrationState {
   name: string;
-  imageUri: string | null;
-  location: LatLng | null; 
+  description: string;
+  images: string[]; // várias fotos da arte
+  location: LatLng | null;
 }
 
 interface RegistrationContextProps extends RegistrationState {
   setName: (name: string) => void;
-  setImageUri: (uri: string | null) => void;
+  setDescription: (desc: string) => void;
+  setImages: (uris: string[]) => void;
   setLocation: (location: LatLng | null) => void;
   clearForm: () => void;
 }
 
 const initialState: RegistrationState = {
   name: '',
-  imageUri: null,
+  description: '',
+  images: [],
   location: null,
 };
 
-const RegistrationContext = createContext<RegistrationContextProps | undefined>(undefined);
+const RegistrationContext = React.createContext<RegistrationContextProps | undefined>(undefined);
 
 const useRegistration = () => {
-  const context = useContext(RegistrationContext);
+  const context = React.useContext(RegistrationContext);
   if (!context) {
     throw new Error('useRegistration deve ser usado dentro de um RegistrationProvider');
   }
@@ -48,22 +51,26 @@ const useRegistration = () => {
 };
 
 const RegistrationProvider = ({ children }: { children: React.ReactNode }) => {
-  const [name, setName] = useState(initialState.name);
-  const [imageUri, setImageUri] = useState(initialState.imageUri);
-  const [location, setLocation] = useState(initialState.location);
+  const [name, setName] = React.useState(initialState.name);
+  const [images, setImages] = React.useState<string[]>(initialState.images);
+  const [description, setDescription] = React.useState(initialState.description);
+  const [location, setLocation] = React.useState(initialState.location);
 
   const clearForm = () => {
     setName(initialState.name);
-    setImageUri(initialState.imageUri);
+  setImages(initialState.images);
+  setDescription(initialState.description);
     setLocation(initialState.location);
   };
 
   const value = {
     name,
-    imageUri,
+    description,
+    images,
     location,
     setName,
-    setImageUri,
+    setDescription,
+    setImages,
     setLocation,
     clearForm,
   };
@@ -79,7 +86,7 @@ type ScreenProps = {
   setScreen: (screen: 'registration' | 'map' | 'success') => void;
 };
 const RegistrationScreen = ({ setScreen }: ScreenProps) => {
-  const { name, setName, imageUri, setImageUri, location } = useRegistration();
+  const { name, setName, description, setDescription, images, setImages, location } = useRegistration();
 
   // Hooks de permissão
   const [cameraPermission, requestCameraPermission] = ImagePicker.useCameraPermissions();
@@ -111,7 +118,8 @@ const RegistrationScreen = ({ setScreen }: ScreenProps) => {
     });
     // Verifica se a seleção não foi cancelada e se 'assets' existe
     if (result.assets && result.assets.length > 0) {
-      setImageUri(result.assets[0].uri);
+      // adiciona a nova foto ao array
+      setImages([...images, result.assets[0].uri]);
     }
   };
 
@@ -126,30 +134,70 @@ const RegistrationScreen = ({ setScreen }: ScreenProps) => {
     });
     // Verifica se a seleção não foi cancelada e se 'assets' existe
     if (result.assets && result.assets.length > 0) {
-      setImageUri(result.assets[0].uri);
+      // adiciona a(s) imagem(ns) selecionada(s)
+      setImages([...images, result.assets[0].uri]);
     }
   };
 
-  const isFormComplete = !!name && !!imageUri && !!location;
-  const profileImage: ImageSourcePropType = imageUri ? { uri: imageUri } : { uri: 'https://placehold.co/200x200/e0e0e0/333?text=Foto' };
+  const removeImage = (index: number) => {
+    const newImages = images.filter((_, i) => i !== index);
+    setImages(newImages);
+  };
+
+  const isFormComplete = !!name && !!description && images.length > 0 && !!location;
+  const profileImage: ImageSourcePropType = images.length > 0 ? { uri: images[0] } : { uri: 'https://placehold.co/200x200/e0e0e0/333?text=Foto' };
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.headerTitle}>Preencha os seguintes campos para se inscrever</Text>
+      <Text style={styles.headerTitle}>Detetive de Arte Urbana — Catalogar nova arte</Text>
       <View style={styles.card}>
-        {/* --- Foto --- */}
-        <Text style={styles.label}>1. Sua Foto </Text>
+        {/* --- Fotos da Arte --- */}
+        <Text style={styles.label}>1. Fotos da Arte </Text>
         <Image
           source={profileImage}
-          style={styles.image}
+          style={[styles.successImage, { width: 200, height: 200 }]}
         />
         <View style={styles.buttonsContainer}>
-          <Button title="Tirar Foto" onPress={handleTakePhoto} />
-          <Button title="Escolher da Galeria" onPress={handlePickFromGallery} />
-        </View>
+          <TouchableOpacity
+            style={styles.photoButtonOuter}
+            activeOpacity={0.9}
+            onPress={handleTakePhoto}
+          >
+            <View style={[styles.photoButtonInner, styles.photoButtonPrimary, { shadowColor: colors.accent }]}
+            >
+              <Ionicons name="camera" style={styles.photoIcon} />
+              <Text style={styles.photoButtonText}>Tirar Foto</Text>
+            </View>
+          </TouchableOpacity>
 
-        {/* --- Nome --- */}
-        <Text style={styles.label}>2. Nome Completo</Text>
+          <TouchableOpacity
+            style={styles.photoButtonOuter}
+            activeOpacity={0.9}
+            onPress={handlePickFromGallery}
+          >
+            {/* Botão de galeria: sem borda e sem padding conforme pedido */}
+            <View style={[styles.photoButtonInnerCompact, styles.photoButtonSecondary]}>
+              <Ionicons name="images" style={styles.photoIcon} />
+              <Text style={styles.photoButtonText}>Escolher da Galeria</Text>
+            </View>
+          </TouchableOpacity>
+        </View>
+        {/* Miniaturas (sempre que houver) */}
+        {images.length > 0 && (
+          <ScrollView horizontal style={{ marginTop: 8 }} contentContainerStyle={styles.thumbsRow}>
+            {images.map((uri, idx) => (
+              <View key={idx} style={styles.thumbWrapper}>
+                <Image source={{ uri }} style={styles.thumbImage} />
+                <TouchableOpacity style={styles.removeBlob} onPress={() => removeImage(idx)}>
+                  <Ionicons name="close" style={styles.removeIcon} />
+                </TouchableOpacity>
+              </View>
+            ))}
+          </ScrollView>
+        )}
+
+        {/* --- Nome e Descrição --- */}
+        <Text style={styles.label}>2. Seu Nome</Text>
         <TextInput
           style={styles.input}
           placeholder="Digite seu nome..."
@@ -157,12 +205,22 @@ const RegistrationScreen = ({ setScreen }: ScreenProps) => {
           onChangeText={setName}
           placeholderTextColor="#999"
         />
+        <Text style={styles.label}>Descrição da Foto</Text>
+        <TextInput
+          style={[styles.input, { height: 90, textAlignVertical: 'top' }]}
+          placeholder="Descreva a arte / contexto..."
+          value={description}
+          onChangeText={setDescription}
+          placeholderTextColor="#999"
+          multiline
+        />
 
         {/* --- Endereço (Mapa) --- */}
-        <Text style={styles.label}>3. Endereço</Text>
+        <Text style={styles.label}>3. Localização</Text>
         <TouchableOpacity style={styles.mapButton} onPress={() => setScreen('map')}>
+          <Ionicons name="map" size={18} color={colors.primary} />
           <Text style={styles.mapButtonText}>
-            {location ? 'Endereço Selecionado!' : 'Selecionar no Mapa'}
+            {location ? '  Local marcado no mapa' : '  Selecionar local no mapa'}
           </Text>
         </TouchableOpacity>
         {location && (
@@ -176,8 +234,12 @@ const RegistrationScreen = ({ setScreen }: ScreenProps) => {
           style={[styles.submitButton, !isFormComplete && styles.submitButtonDisabled]}
           disabled={!isFormComplete}
           onPress={() => setScreen('success')}
+          activeOpacity={0.9}
         >
-          <Text style={styles.submitButtonText}>Inscrever-se!</Text>
+          <View style={styles.submitButtonInner}>
+            <Ionicons name="checkmark-circle" size={22} color={!isFormComplete ? '#9aa' : colors.primary} />
+            <Text style={[styles.submitButtonText, !isFormComplete && styles.submitButtonDisabled]}>Catalogar Arte</Text>
+          </View>
         </TouchableOpacity>
       </View>
     </ScrollView>
@@ -186,16 +248,16 @@ const RegistrationScreen = ({ setScreen }: ScreenProps) => {
 
 const MapScreen = ({ setScreen }: ScreenProps) => {
   const { setLocation } = useRegistration();
-  const [initialRegion, setInitialRegion] = useState<Region>({
+  const [initialRegion, setInitialRegion] = React.useState<Region>({
     latitude: -23.5505,  
     longitude: -46.6333,
     latitudeDelta: 0.0922,
     longitudeDelta: 0.0421,
   });
-  const [tappedMarker, setTappedMarker] = useState<LatLng | null>(null);
+  const [tappedMarker, setTappedMarker] = React.useState<LatLng | null>(null);
 
   // Busca a localização atual do usuário para centralizar o mapa
-  useEffect(() => {
+  React.useEffect(() => {
     let locationSubscription: Location.LocationSubscription | null = null;
 
     const getLocation = async () => {
@@ -308,10 +370,15 @@ const MapScreen = ({ setScreen }: ScreenProps) => {
         {tappedMarker && <Marker coordinate={tappedMarker} pinColor="blue" />}
       </MapView>
       <View style={styles.mapConfirmButton}>
-        <Button title="Confirmar Endereço" onPress={confirmLocation} />
+        <TouchableOpacity style={styles.mapActionButton} onPress={confirmLocation} activeOpacity={0.9}>
+          <Ionicons name="checkmark" size={20} color="#071014" />
+          <Text style={styles.mapActionButtonText}>Confirmar Endereço</Text>
+        </TouchableOpacity>
       </View>
       <View style={styles.mapBackButton}>
-        <Button title="Voltar" onPress={() => setScreen('registration')} color="#555" />
+        <TouchableOpacity onPress={() => setScreen('registration')} activeOpacity={0.9} style={{ padding: 10 }}>
+          <Ionicons name="arrow-back" size={22} color={colors.primary} />
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -319,15 +386,15 @@ const MapScreen = ({ setScreen }: ScreenProps) => {
 
 
 const SuccessScreen = ({ setScreen }: ScreenProps) => {
-  const { name, imageUri, location, clearForm } = useRegistration();
-  const [address, setAddress] = useState<string>('Buscando endereço...');
+  const { name, description, images, location, clearForm } = useRegistration();
+  const [address, setAddress] = React.useState<string>('Buscando endereço...');
 
   // Converte as coordenadas (location) em um endereço legível
-  useEffect(() => {
+  React.useEffect(() => {
     if (location) {
       (async () => {
         try {
-          // Solicita permissão novamente (necessário para o geocode em alguns casos)
+          
           await Location.requestForegroundPermissionsAsync();
           const geocoded = await Location.reverseGeocodeAsync(location);
           if (geocoded.length > 0) {
@@ -361,20 +428,36 @@ const SuccessScreen = ({ setScreen }: ScreenProps) => {
       {/* Aplicamos o styles.card E o styles.successCard */}
       <View style={[styles.card, styles.successCard]}>
         <Text style={styles.successTitle}>
-          Parabéns, {name.split(' ')[0]}!
+          Arte catalogada!
         </Text>
         <Text style={styles.successSubtitle}>
-          Você acaba de se inscrever como mesário!
+          Obrigado por contribuir com o catálogo urbano, {name.split(' ')[0]}!
         </Text>
-        <Image source={imageUri ? { uri: imageUri } : { uri: 'https://placehold.co/200x200' }} style={[styles.image, styles.successImage]} />
-        <Text style={[styles.label, styles.successLabel]}>Nome:</Text>
-        <Text style={[styles.infoText, styles.successInfoText]}>{name}</Text>
-        
-        <Text style={[styles.label, styles.successLabel]}>Convocado para:</Text>
-        <Text style={[styles.infoText, styles.successInfoText]}>{address}</Text>
+        <ScrollView horizontal style={{ marginVertical: 12 }}>
+          {images && images.length > 0 ? (
+            images.map((uri, idx) => (
+              <Image key={idx} source={{ uri }} style={[styles.successImage, { width: 120, height: 120, marginRight: 8 }]} />
+            ))
+          ) : (
+            <Image source={{ uri: 'https://placehold.co/200x200' }} style={[styles.successImage, { width: 120, height: 120 }]} />
+          )}
+        </ScrollView>
+  <Text style={[styles.label, styles.successLabel]}>Nome:</Text>
+  <Text style={[styles.infoText, styles.successInfoText]}>{name}</Text>
+
+  <Text style={[styles.label, styles.successLabel]}>Descrição:</Text>
+  <Text style={[styles.infoText, styles.successInfoText]}>{description}</Text>
+
+  <Text style={[styles.label, styles.successLabel]}>Local:</Text>
+  <Text style={[styles.infoText, styles.successInfoText]}>{address}</Text>
 
         <View style={{ marginTop: 20 }} />
-        <Button title="Inscrever Outro (Voltar)" onPress={handleBack} color={colors.macabreRed} />
+        <TouchableOpacity style={[styles.submitButton]} onPress={handleBack} activeOpacity={0.9}>
+          <View style={styles.submitButtonInner}>
+            <Ionicons name="repeat" size={22} color={colors.primary} />
+            <Text style={styles.submitButtonText}>Catalogar Outra</Text>
+          </View>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -384,7 +467,7 @@ const SuccessScreen = ({ setScreen }: ScreenProps) => {
 type ScreenName = 'registration' | 'map' | 'success';
 
 export default function App() {
-  const [screen, setScreen] = useState<ScreenName>('registration');
+  const [screen, setScreen] = React.useState<ScreenName>('registration');
 
   const renderScreen = () => {
     switch (screen) {
